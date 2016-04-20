@@ -103,7 +103,7 @@ type APIClient interface {
 	Timeline(int) ([]byte, error)
 }
 
-type TwitterClient struct {
+type Client struct {
 	permits map[TwitterResourceKey]*concurrent.Semaphore
 
 	*OAuthClient
@@ -114,26 +114,15 @@ func Non200Error(statusCode int, req string) error {
 	return errors.New(message)
 }
 
-func NewClient(key, secret string) (*TwitterClient, error) {
+func NewClient(key, secret string) (*Client, error) {
 	oauthClient := NewOAuth2Client(key, secret, TwitterTokenUrl)
-	twitterClient := &TwitterClient{
+	twitterClient := &Client{
 		make(map[TwitterResourceKey]*concurrent.Semaphore),
 		oauthClient,
 	}
 
-	// ? fix
-	go func() {
-		interval := time.NewTicker(30 * time.Second)
-		for _ = range interval.C {
-			if data, err := twitterClient.RateLimit(false); err == nil {
-				twitterClient.update(data)
-				log.Println("timeline", twitterClient.permits[TimelineResource.Key()].Available())
-
-			} else {
-				log.Println(err)
-			}
-		}
-	}()
+	// periodically re-poll the rate limit resource to update permits (i.e., rl refresh)
+	go twitterClient.poll(30 * time.Second)
 
 	// make initial call to ratelimit resource to set permits
 	if data, err := twitterClient.RateLimit(true); err == nil {
@@ -146,7 +135,19 @@ func NewClient(key, secret string) (*TwitterClient, error) {
 	}
 }
 
-func (c *TwitterClient) update(data *RateLimit) {
+func (c *Client) poll(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	for _ = range ticker.C {
+		if data, err := c.RateLimit(false); err == nil {
+			c.update(data)
+
+		} else {
+			log.Println(err)
+		}
+	}
+}
+
+func (c *Client) update(data *RateLimit) {
 	for key, stats := range data.Resources {
 		if _, exists := c.permits[key]; !exists {
 			c.permits[key] = concurrent.NewSemaphore(stats.Limit)
@@ -158,7 +159,7 @@ func (c *TwitterClient) update(data *RateLimit) {
 	}
 }
 
-func (c *TwitterClient) Acquire(key TwitterResourceKey) <-chan concurrent.Permit {
+func (c *Client) Acquire(key TwitterResourceKey) <-chan concurrent.Permit {
 	permits, exists := c.permits[key]
 	if !exists {
 		empty := make(chan concurrent.Permit)
@@ -169,7 +170,7 @@ func (c *TwitterClient) Acquire(key TwitterResourceKey) <-chan concurrent.Permit
 	return permits.Acquire(1)
 }
 
-func (c *TwitterClient) RateLimit(skipAcquire bool) (*RateLimit, error) {
+func (c *Client) RateLimit(skipAcquire bool) (*RateLimit, error) {
 	params := map[string]string{}
 	b, err := getResource(c, RateLimitResource, params, skipAcquire)
 	if err != nil {
@@ -186,7 +187,7 @@ func (c *TwitterClient) RateLimit(skipAcquire bool) (*RateLimit, error) {
 	return FromTwitterRateLimit(ratelimit), nil
 }
 
-func (c *TwitterClient) Posts(userId int) ([]Post, error) {
+func (c *Client) Posts(userId int) ([]Post, error) {
 	params := map[string]string{
 		"user_id": fmt.Sprintf("%d", userId),
 	}
@@ -211,7 +212,7 @@ func (c *TwitterClient) Posts(userId int) ([]Post, error) {
 	return posts, nil
 }
 
-func getResource(c *TwitterClient, r TwitterResource, q map[string]string, skipAcquire bool) ([]byte, error) {
+func getResource(c *Client, r TwitterResource, q map[string]string, skipAcquire bool) ([]byte, error) {
 	acquired := make(chan bool, 1)
 	defer close(acquired)
 
