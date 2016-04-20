@@ -69,7 +69,7 @@ func ForwardLog(udpPort uint) http.HandlerFunc {
 	return websocket.Handler(usingWebsocket).ServeHTTP
 }
 
-func ShowLog(host string, port uint) http.HandlerFunc {
+func ShowLog(host string) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, req *http.Request) {
 		var connId string
@@ -92,11 +92,9 @@ func ShowLog(host string, port uint) http.HandlerFunc {
 		t, _ := template.New("show").Parse(LogShow)
 		t.Execute(w, struct {
 			Host   string
-			Port   uint
 			Cookie string
 		}{
 			Host:   host,
-			Port:   port,
 			Cookie: CookieName,
 		})
 

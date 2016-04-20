@@ -38,7 +38,7 @@ const LogShow = `
       const z = document.cookie.replace(/(?:(?:^|.*;\s*)_z12345\s*\=\s*([^;]*).*$)|^.*$/, "$1");
       const el = document.getElementById("logs");
       const $log = Rx.DOM.fromWebSocket(
-        'ws://{{.Host}}:{{.Port}}/x/log?id=' + z,
+        'ws://{{.Host}}/x/log?id=' + z,
         null,
         new Rx.Subject(),
         new Rx.Subject());
