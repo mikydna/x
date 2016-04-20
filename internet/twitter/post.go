@@ -7,7 +7,7 @@ import (
 )
 
 import (
-	"github.com/mikydna/z/x/stats"
+	"github.com/mikydna/x/stats"
 )
 
 type Post struct {

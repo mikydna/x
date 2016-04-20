@@ -6,7 +6,7 @@ import (
 )
 
 import (
-	"github.com/mikydna/z/x/set"
+	"github.com/mikydna/x/set"
 )
 
 var (

@@ -11,7 +11,7 @@ import (
 )
 
 import (
-	"github.com/mikydna/z/x/managed"
+	"github.com/mikydna/x/managed"
 	"golang.org/x/net/websocket"
 )
 

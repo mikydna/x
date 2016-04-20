@@ -7,10 +7,6 @@ import (
 	"testing"
 )
 
-import (
-	"github.com/mikydna/x/strings"
-)
-
 func TestTwitterRateLimit_Decode(t *testing.T) {
 	b, err := ioutil.ReadFile("./_testdata/twitter-ratelimit.json")
 	if err != nil {
@@ -43,13 +39,8 @@ func TestTwitterRateLimit_Decode(t *testing.T) {
 		families = append(families, family)
 	}
 
-	expectedFamilies := []string{"help", "users", "statuses", "search"}
-	if len(families) != len(expectedFamilies) {
-		t.Errorf("Unexpected resource families len: %d != %d", len(expectedFamilies), len(families))
-
-	} else if !strings.Contains(families, expectedFamilies...) {
-		t.Errorf("Unexpected resource families: %v != %v", expectedFamilies, families)
-
+	if len(families) != 4 {
+		t.Errorf("Unexpected resource families len: %d != %d", 4, len(families))
 	}
 
 	// rate limit resource
