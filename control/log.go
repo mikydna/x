@@ -23,12 +23,11 @@ func ForwardLog(udpPort uint) http.HandlerFunc {
 	conns := managed.NewWebsockets()
 
 	go func() {
-		en0, _ := net.InterfaceByName("en0")
-		log.Println(en0.MulticastAddrs())
+		// en0, _ := net.InterfaceByName("en0")
+		// log.Println(en0.MulticastAddrs())
 
 		addrStr := fmt.Sprintf("224.0.0.251:%d", udpPort) // wat?
 		addr, _ := net.ResolveUDPAddr("udp", addrStr)
-
 		log.Println("udp=", addr)
 
 		udp, err := net.ListenMulticastUDP("udp", nil, addr)

@@ -114,12 +114,17 @@ func (s *Scheduler) Update() {
 			go func() {
 				result, err := job.Run()
 				if err != nil {
-					log.Printf("[CRITICAL]", err)
+					log.Printf("[CRITICAL] %v", err)
 				}
 
 				s.completed.Insert(result.Of)
 				s.running.Remove(result.Of)
-				s.results <- result
+
+				// fix
+				if result != nil {
+					s.results <- result
+				}
+
 			}()
 		}
 	}
