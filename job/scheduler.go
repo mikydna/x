@@ -3,6 +3,7 @@ package job
 import (
 	"errors"
 	"log"
+	"sync"
 )
 
 import (
@@ -31,6 +32,7 @@ type Scheduler struct {
 	completed set.Uint64
 	results   chan *Result
 	listeners []chan *Result
+	*sync.Mutex
 }
 
 type scheduled struct {
@@ -51,6 +53,7 @@ func NewScheduler() *Scheduler {
 		completed: make(set.Uint64),
 		results:   make(chan *Result),
 		listeners: []chan *Result{},
+		Mutex:     &sync.Mutex{},
 	}
 
 	go func() {
@@ -70,6 +73,9 @@ func NewScheduler() *Scheduler {
 }
 
 func (s *Scheduler) Add(job Job, deps ...uint64) error {
+	s.Lock()
+	defer s.Unlock()
+
 	if _, exists := s.waiting[job.Hash()]; exists {
 		return ErrJobAlreadySubmitted
 	}
@@ -103,6 +109,9 @@ func (s *Scheduler) Info() schedulerInfo {
 }
 
 func (s *Scheduler) Update() {
+	s.Lock()
+	defer s.Unlock()
+
 	for _, scheduled := range s.waiting {
 		job := scheduled.job
 		ready := scheduled.dep.SubsetOf(s.completed)
