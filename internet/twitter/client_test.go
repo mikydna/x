@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	TwitterConsumerKey    = os.Getenv("TwitterConsumerKey")
-	TwitterConsumerSecret = os.Getenv("TwitterConsumerSecret")
+	TwitterConsumerKey    = os.Getenv("TWITTER_KEY")
+	TwitterConsumerSecret = os.Getenv("TWITTER_SECRET")
 )
 
 func TestAPIClient_RateLimit(t *testing.T) {
@@ -16,12 +16,12 @@ func TestAPIClient_RateLimit(t *testing.T) {
 	}
 
 	if TwitterConsumerKey == "" {
-		t.Errorf("Env var required: %s", "TwitterConsumerKey")
+		t.Errorf("Env var required: %s", "TWITTER_KEY")
 		t.FailNow()
 	}
 
 	if TwitterConsumerSecret == "" {
-		t.Errorf("Env var required: %s", "TwitterConsumerSecret")
+		t.Errorf("Env var required: %s", "TWITTER_SECRET")
 		t.FailNow()
 	}
 

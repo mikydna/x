@@ -50,5 +50,42 @@ func TestPost_TwitterPostConv(t *testing.T) {
 }
 
 func TestPost_Json(t *testing.T) {
-	t.Skip("TODO: Test json marshal/unmarhsal")
+	writePosts := []Post{
+		Post{Id: 100},
+		Post{Id: 200},
+		Post{Id: 300},
+	}
+
+	writeBuf := bytes.NewBuffer([]byte{})
+	encoder := json.NewEncoder(writeBuf)
+
+	if err := encoder.Encode(writePosts); err != nil {
+		t.Error(err)
+	}
+
+	jsonb := writeBuf.Bytes()
+
+	readBuf := bytes.NewBuffer(jsonb)
+	decoder := json.NewDecoder(readBuf)
+
+	var readPosts []Post
+	if err := decoder.Decode(&readPosts); err != nil {
+		t.Error(err)
+	}
+
+	if numRead := len(readPosts); numRead != 3 {
+		t.Error("Unexpected number of posts read: %d != %d", 3, len(readPosts))
+	}
+
+	if firstPost := readPosts[0]; firstPost.Id != 100 {
+		t.Error("Unexpected post id: %d != %d", 100, firstPost.Id)
+	}
+
+	if secondPost := readPosts[1]; secondPost.Id != 200 {
+		t.Error("Unexpected post id: %d != %d", 200, secondPost.Id)
+	}
+
+	if thirdPost := readPosts[2]; thirdPost.Id != 300 {
+		t.Error("Unexpected post id: %d != %d", 300, thirdPost.Id)
+	}
 }
