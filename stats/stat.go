@@ -24,6 +24,10 @@ func NewStat(recordedAt time.Time) *Stat {
 	}
 }
 
+func (s Stat) Len() int {
+	return len(s.Values)
+}
+
 func (s Stat) Get(name string) (float64, error) {
 	if val, exists := s.Values[name]; exists {
 		return val, nil
