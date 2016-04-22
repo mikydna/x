@@ -28,8 +28,8 @@ type Result struct {
 
 type Scheduler struct {
 	waiting   map[uint64]*scheduled
-	running   set.Uint64
-	completed set.Uint64
+	running   *set.Uint64
+	completed *set.Uint64
 	results   chan *Result
 	listeners []chan *Result
 	*sync.Mutex
@@ -37,20 +37,20 @@ type Scheduler struct {
 
 type scheduled struct {
 	job Job
-	dep set.Uint64
+	dep *set.Uint64
 }
 
 type schedulerInfo struct {
-	Waiting   set.Uint64
-	Running   set.Uint64
-	Completed set.Uint64
+	Waiting   *set.Uint64
+	Running   *set.Uint64
+	Completed *set.Uint64
 }
 
 func NewScheduler() *Scheduler {
 	scheduler := &Scheduler{
 		waiting:   make(map[uint64]*scheduled),
-		running:   make(set.Uint64),
-		completed: make(set.Uint64),
+		running:   set.NewUint64Set(),
+		completed: set.NewUint64Set(),
 		results:   make(chan *Result),
 		listeners: []chan *Result{},
 		Mutex:     &sync.Mutex{},
@@ -96,7 +96,7 @@ func (s *Scheduler) Listen() <-chan *Result {
 }
 
 func (s *Scheduler) Info() schedulerInfo {
-	waiting := make(set.Uint64)
+	waiting := set.NewUint64Set()
 	for hash, _ := range s.waiting {
 		waiting.Insert(hash)
 	}
