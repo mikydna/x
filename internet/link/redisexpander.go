@@ -77,7 +77,7 @@ func (e *RedisExpander) Expand(rawurl string) *Result {
 
 	var result *Result
 	if hit {
-		e.stats["hit"] += 1
+		// e.stats["hit"] += 1
 
 		// create result from redis response
 		var target *url.URL
@@ -111,7 +111,7 @@ func (e *RedisExpander) Expand(rawurl string) *Result {
 		}
 
 	} else /* miss */ {
-		e.stats["miss"] += 1
+		// e.stats["miss"] += 1
 
 		result = e.expander.Expand(rawurl)
 		expire := DefaultExpire
