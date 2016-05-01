@@ -24,6 +24,7 @@ var DefaultExpander Expander = NewLinkExpander(
 type Result struct {
 	URL          *url.URL
 	Domain       string
+	Title        string
 	Err          error
 	StatusCode   int
 	ResponseTime time.Duration
@@ -105,9 +106,16 @@ func (e *LinkExpander) Expand(rawurl string) (result *Result) {
 		domain, _ = publicsuffix.EffectiveTLDPlusOne(url.Host)
 	}
 
+	var title string
+
+	if statusCode == 200 && resp.Body != nil {
+		title = ExtractTitle(resp.Body)
+	}
+
 	result = &Result{
 		URL:          url,
 		Domain:       domain,
+		Title:        title,
 		Err:          err,
 		StatusCode:   statusCode,
 		ResponseTime: elapsed,

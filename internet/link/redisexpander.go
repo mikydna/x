@@ -58,6 +58,11 @@ func (e *RedisExpander) Expand(rawurl string) *Result {
 	e.hash.Write([]byte(norm.String()))
 
 	conn, err := e.Conn()
+	if err != nil {
+		log.Println(">>", err)
+		return nil
+	}
+
 	defer e.Release(conn)
 
 	if err != nil {
