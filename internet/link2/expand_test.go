@@ -16,8 +16,8 @@ func TestExpand(t *testing.T) {
 	}
 
 	var (
-		result    *Result
-		expandErr error
+		result *Result
+		err    error
 	)
 
 	expander := NewExpander(http.DefaultClient, ExtractBasic)
@@ -25,7 +25,7 @@ func TestExpand(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
 
 	go func() {
-		result, expandErr = expander.Expand(ctx, "http://google.com")
+		result, err = expander.Expand(ctx, "http://google.com")
 		defer cancel()
 	}()
 
@@ -34,6 +34,10 @@ func TestExpand(t *testing.T) {
 
 		if result == nil {
 			t.Fatal("Unexpected nil result")
+		}
+
+		if err != nil {
+			t.Fatalf("Unexpected err: %v", err)
 		}
 
 		if result.StatusCode != 200 {
