@@ -1,7 +1,9 @@
 package link2
 
 import (
+	"io"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -20,63 +22,59 @@ import (
 // expansion results should expire/retry-later
 // - servers can be temporarily down.. expbkoff retry
 
-type doHandlerFunc func(*http.Response, error) error
+type ContentType uint16
 
-func doAsync(ctx context.Context, req *http.Request, f doHandlerFunc) error {
-	// ? create a new client for each req, need to access cancel
-	t := &http.Transport{}
-	c := &http.Client{
-		Transport: t,
-	}
+type Content map[ContentType]string
 
-	errs := make(chan error, 1)
-	go func() {
-		errs <- f(c.Do(req))
-	}()
+type ContentFunc func(io.Reader) Content
 
-	select {
-	case <-ctx.Done():
-		t.CancelRequest(req)
-		<-errs
-		return ctx.Err()
-	case err := <-errs:
-		return err
-	}
+type Result struct {
+	StatusCode   int
+	ResponseTime time.Duration
+	ResolvedURL  *url.URL
+	Content      Content
 }
 
-func Expand(ctx context.Context, client *http.Client, rawurl string) (*Result, error) {
+const (
+	Title ContentType = iota
+	Description
+)
+
+type Expander struct {
+	client  *http.Client
+	content ContentFunc
+}
+
+func NewExpander(client *http.Client, processor ContentFunc) *Expander {
+	expander := Expander{
+		client:  client,
+		content: processor,
+	}
+
+	return &expander
+}
+
+func (e *Expander) Expand(ctx context.Context, url string) (*Result, error) {
 	startedAt := time.Now()
-	resp, err := ctxhttp.Get(ctx, client, rawurl)
+	resp, err := ctxhttp.Get(ctx, e.client, url)
 	if err != nil {
 		return nil, err
 	}
 
+	responseTime := time.Since(startedAt)
+
+	var content Content
 	if resp != nil && resp.Body != nil {
+		content = e.content(resp.Body)
 		defer resp.Body.Close()
 	}
 
 	result := &Result{
 		ResolvedURL:  resp.Request.URL,
-		ResponseTime: time.Since(startedAt),
+		ResponseTime: responseTime,
 		StatusCode:   resp.StatusCode,
+		Content:      content,
 	}
-
-	// req, err := http.NewRequest("GET", rawurl, nil)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// var result Result
-	// err = doAsync(ctx, req, func(resp *http.Response, err error) error {
-	// 	if resp != nil && resp.Body != nil {
-	// 		defer resp.Body.Close()
-	// 	}
-
-	// 	result.StatusCode = resp.StatusCode
-	// 	result.ResolvedURL = resp.Request.URL
-
-	// 	return err
-	// })
 
 	return result, nil
 }

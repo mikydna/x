@@ -11,16 +11,17 @@ import (
 )
 
 func TestExpand(t *testing.T) {
-	bg := context.Background()
-	threaded := context.WithValue(bg, "request-id", 1)
+	expander := NewExpander(http.DefaultClient, ExtractBasic)
+
+	todo := context.TODO()
+	threaded := context.WithValue(todo, "request-id", 1)
 	withTimeout, cancel := context.WithTimeout(threaded, 5*time.Second)
 
-	start := time.Now()
 	go func() {
-		result, err := Expand(withTimeout, http.DefaultClient, "http://google.com")
+		result, err := expander.Expand(withTimeout, "http://google.com")
 		defer cancel()
 
-		t.Log(time.Since(start), result, err)
+		t.Log(result, err)
 	}()
 
 	select {
