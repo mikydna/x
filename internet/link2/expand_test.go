@@ -11,25 +11,41 @@ import (
 )
 
 func TestExpand(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Requires outbound http calls")
+	}
+
+	var (
+		result    *Result
+		expandErr error
+	)
+
 	expander := NewExpander(http.DefaultClient, ExtractBasic)
 
-	todo := context.TODO()
-	threaded := context.WithValue(todo, "request-id", 1)
-	withTimeout, cancel := context.WithTimeout(threaded, 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
 
 	go func() {
-		result, err := expander.Expand(withTimeout, "http://google.com")
+		result, expandErr = expander.Expand(ctx, "http://google.com")
 		defer cancel()
-
-		t.Log(result, err)
 	}()
 
 	select {
-	case <-withTimeout.Done():
-		t.Log(withTimeout.Value("request-id"))
-	case <-time.After(6 * time.Second):
-		t.Log(withTimeout.Err())
-		t.Error("Unexpected")
+	case <-ctx.Done():
+
+		if result == nil {
+			t.Fatal("Unexpected nil result")
+		}
+
+		if result.StatusCode != 200 {
+			t.Errorf("Unexpected statusCode: %d != %d", 200, result.StatusCode)
+		}
+
+		if result.ResolvedURL == nil || result.ResolvedURL.String() != "http://www.google.com/" {
+			t.Errorf("Unexpected resolved url: %s != %s", "http://www.google.com/", result.ResolvedURL)
+		}
+
+	case <-time.After(3 * time.Second):
+		t.Fatal("Unexpected timeout")
 	}
 
 }
