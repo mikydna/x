@@ -10,10 +10,6 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-func NoopContent(r io.Reader) Content {
-	return make(Content)
-}
-
 func flatten(root *html.Node) []*html.Node {
 	result := []*html.Node{root}
 	for curr := root.FirstChild; curr != nil; curr = curr.NextSibling {
@@ -24,6 +20,10 @@ func flatten(root *html.Node) []*html.Node {
 	}
 
 	return result
+}
+
+func NoopContent(io.Reader) Content {
+	return make(Content)
 }
 
 func ExtractBasic(body io.Reader) (content Content) {
@@ -43,7 +43,7 @@ func ExtractBasic(body io.Reader) (content Content) {
 
 		case atom.Meta:
 			// special case: pair meta attrs to form key-val pairs
-			// - twitter, og: uses a non-standard property tag name ?
+			// - twitter, og: uses a non-standard 'property' tag name ?
 			var name, content string
 			for _, attr := range element.Attr {
 				switch attr.Key {
@@ -63,7 +63,7 @@ func ExtractBasic(body io.Reader) (content Content) {
 		}
 	}
 
-	// trim (fix later)
+	// (fix later)
 	// - this is a little more involved. meta/og tags are often the cleanest strs
 	//   but they are not always avail.
 	// - (nice) if multiple entries, per type, exists, there is a non-trival
