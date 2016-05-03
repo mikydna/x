@@ -12,9 +12,9 @@ import (
 )
 
 type testcase struct {
-	URL      string
-	Expected *Result
-	Err      error
+	URL       string
+	Expected  *Result
+	ShouldErr bool
 }
 
 var (
@@ -29,7 +29,7 @@ var (
 				StatusCode:  200,
 				ResolvedURL: google,
 			},
-			Err: nil,
+			ShouldErr: false,
 		},
 		testcase{
 			URL: "http://yahoo.com",
@@ -37,7 +37,7 @@ var (
 				StatusCode:  200,
 				ResolvedURL: yahoo,
 			},
-			Err: nil,
+			ShouldErr: false,
 		},
 		testcase{
 			URL: "http://altavista.com",
@@ -45,12 +45,13 @@ var (
 				StatusCode:  200,
 				ResolvedURL: altavista,
 			},
-			Err: nil,
+			ShouldErr: false,
 		},
-		// testcase{
-		// 	URL:      "http://doesnotexist.really",
-		// 	Expected: nil,
-		// },
+		testcase{
+			URL:       "http://doesnotexist.really",
+			Expected:  nil,
+			ShouldErr: true,
+		},
 	}
 )
 
@@ -78,29 +79,36 @@ func TestRedisExpand(t *testing.T) {
 
 		for _, test := range TestTable {
 			expected := test.Expected
+			shouldErr := test.ShouldErr
 
 			ctx := context.TODO()
 			result, err := expander.Expand(ctx, test.URL)
-			if err != nil {
-				t.Errorf("Unexpected err: %v", err)
-				t.FailNow()
-			}
 
-			if (expected == nil) && (result != nil) {
-				t.Error("Unexpected non-nil expand result")
-			}
+			if result == nil {
 
-			if expected.ResolvedURL.String() != result.ResolvedURL.String() {
-				t.Errorf("Unexpected expand resolved url: %v != %v", expected.ResolvedURL, result.ResolvedURL)
-			}
+				if expected != nil {
+					t.Error("Unexpected non-nil expand result")
+				}
 
-			if expected.StatusCode != result.StatusCode {
-				t.Errorf("Unexpected expand status code: %d != %d", expected.StatusCode, result.StatusCode)
+				if shouldErr && (err == nil) {
+					t.Error("Unexpected non error")
+				}
+
+			} else {
+
+				if expected.ResolvedURL.String() != result.ResolvedURL.String() {
+					t.Errorf("Unexpected expand resolved url: %v != %v", expected.ResolvedURL, result.ResolvedURL)
+				}
+
+				if expected.StatusCode != result.StatusCode {
+					t.Errorf("Unexpected expand status code: %d != %d", expected.StatusCode, result.StatusCode)
+				}
+
 			}
 		}
 
-		if stats := expander.Stats(); stats["miss"] != 3 || stats["hit"] > 0 {
-			t.Errorf("Unexpected hit/miss: miss %d != %d; hit %d != %d", stats["miss"], 3, stats["hit"], 0)
+		if stats := expander.Stats(); stats["miss"] != 4 || stats["hit"] > 0 {
+			t.Errorf("Unexpected hit/miss: miss %.0f != %.0f; hit %.0f != %.0f", stats["miss"], 4.0, stats["hit"], 0.0)
 		}
 	}
 
@@ -108,29 +116,36 @@ func TestRedisExpand(t *testing.T) {
 
 		for _, test := range TestTable {
 			expected := test.Expected
+			shouldErr := test.ShouldErr
 
 			ctx := context.TODO()
 			result, err := expander.Expand(ctx, test.URL)
-			if err != nil {
-				t.Errorf("Unexpected err: %v", err)
-				t.FailNow()
-			}
 
-			if (expected == nil) && (result != nil) {
-				t.Error("Unexpected non-nil expand result")
-			}
+			if result == nil {
 
-			if expected.ResolvedURL.String() != result.ResolvedURL.String() {
-				t.Errorf("Unexpected expand resolved url: %v != %v", expected.ResolvedURL, result.ResolvedURL)
-			}
+				if expected != nil {
+					t.Error("Unexpected non-nil expand result")
+				}
 
-			if expected.StatusCode != result.StatusCode {
-				t.Errorf("Unexpected expand status code: %d != %d", expected.StatusCode, result.StatusCode)
+				if shouldErr && (err == nil) {
+					t.Error("Unexpected non error")
+				}
+
+			} else {
+
+				if expected.ResolvedURL.String() != result.ResolvedURL.String() {
+					t.Errorf("Unexpected expand resolved url: %v != %v", expected.ResolvedURL, result.ResolvedURL)
+				}
+
+				if expected.StatusCode != result.StatusCode {
+					t.Errorf("Unexpected expand status code: %d != %d", expected.StatusCode, result.StatusCode)
+				}
+
 			}
 		}
 
-		if stats := expander.Stats(); stats["miss"] != 3 || stats["hit"] != 3 {
-			t.Errorf("Unexpected hit/miss: miss %d != %d; hit %d != %d", stats["miss"], 3, stats["hit"], 0)
+		if stats := expander.Stats(); stats["miss"] != 4 || stats["hit"] != 4 {
+			t.Errorf("Unexpected hit/miss: miss%.0f != %.0f; hit %.0f != %.0f", stats["miss"], 4.0, stats["hit"], 4.0)
 		}
 	}
 }

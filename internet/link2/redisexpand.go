@@ -1,6 +1,7 @@
 package link2
 
 import (
+	"errors"
 	"fmt"
 	"hash"
 	"hash/fnv"
@@ -17,7 +18,8 @@ import (
 )
 
 const (
-	DefaultCacheExpire = 24 * time.Hour
+	DefaultCacheExpire      = 24 * time.Hour
+	DefaultCacheErrorExpire = 1 * time.Hour
 )
 
 // fix later: merge with x/stats
@@ -119,10 +121,11 @@ func NewRedisExpander(conf redis.Conf, client *http.Client, processor ContentFun
 	return expander, nil
 }
 
-func (e *RedisExpander) Expand(ctx context.Context, url string) (*Result, error) {
-	conn, err := e.Conn()
+func (e *RedisExpander) Expand(ctx context.Context, url string) (result *Result, err error) {
+	conn, connErr := e.Conn()
 	if err != nil {
-		return nil, err
+		err = connErr
+		return
 	}
 	defer e.Release(conn)
 
@@ -133,46 +136,68 @@ func (e *RedisExpander) Expand(ctx context.Context, url string) (*Result, error)
 
 	// check cache
 	rKey := fmt.Sprintf("link:%d", cacheKey)
-	rMap, err := conn.Cmd("hgetall", rKey).Map()
+	rMap, cmdErr := conn.Cmd("hgetall", rKey).Map()
 	if err != nil {
-		// db-level err, return immediately
-		return nil, err
+		err = cmdErr
+		return
 	}
 
-	var result *Result
 	if len(rMap) == 0 { // miss
-		result, err = e.Expander.Expand(ctx, url)
-		if err != nil {
-			// fix: should cache errors
-			return nil, err
+		var expandErr error
+
+		result, expandErr = e.Expander.Expand(ctx, url)
+		if expandErr != nil {
+			err = expandErr
 		}
 
 		pipeLen := 0
 
-		conn.PipeAppend("hmset", rKey, toStrMap(result))
-		pipeLen += 1
+		if expandErr != nil {
+			conn.PipeAppend("hset", rKey, "ERR", err)
+			pipeLen += 1
 
-		conn.PipeAppend("expire", rKey, DefaultCacheExpire.Seconds())
-		pipeLen += 1
+			conn.PipeAppend("expire", rKey, DefaultCacheErrorExpire.Seconds())
+			pipeLen += 1
+		}
+
+		if result != nil {
+			conn.PipeAppend("hmset", rKey, toStrMap(result))
+			pipeLen += 1
+
+			conn.PipeAppend("expire", rKey, DefaultCacheExpire.Seconds())
+			pipeLen += 1
+		}
 
 		for i := 0; i < pipeLen; i++ {
-			if err := conn.PipeResp().Err; err != nil {
-				return nil, err
+			if pipeErr := conn.PipeResp().Err; pipeErr != nil {
+				err = pipeErr
+				return
 			}
 		}
 
 		e.stats.incr("miss", 1)
 
 	} else { // hit
-		result, err = fromStrMap(rMap)
-		if err != nil {
-			return nil, err
+
+		if str, exists := rMap["ERR"]; exists {
+			cachedErr := errors.New(str)
+			err = cachedErr
+
+		} else {
+			var decodeErr error
+			result, decodeErr = fromStrMap(rMap)
+			if decodeErr != nil {
+				err = decodeErr
+				return
+			}
+
 		}
 
 		e.stats.incr("hit", 1)
+
 	}
 
-	return result, err
+	return
 }
 
 func (e *RedisExpander) Stats() map[string]float64 {
