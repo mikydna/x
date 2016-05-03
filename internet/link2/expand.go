@@ -22,10 +22,6 @@ import (
 // expansion results should expire/retry-later
 // - servers can be temporarily down.. expbkoff retry
 
-type ContentType uint16
-
-type Content map[ContentType]string
-
 type ContentFunc func(io.Reader) Content
 
 type Result struct {
@@ -34,11 +30,6 @@ type Result struct {
 	ResolvedURL  *url.URL
 	Content      Content
 }
-
-const (
-	Title ContentType = iota
-	Description
-)
 
 type Expander struct {
 	client  *http.Client

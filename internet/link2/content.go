@@ -10,17 +10,15 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-func flatten(root *html.Node) []*html.Node {
-	result := []*html.Node{root}
-	for curr := root.FirstChild; curr != nil; curr = curr.NextSibling {
-		switch curr.Type {
-		case html.ElementNode:
-			result = append(result, flatten(curr)...)
-		}
-	}
+type ContentType uint16
 
-	return result
-}
+const (
+	Title ContentType = iota
+	Description
+	FavIcon
+)
+
+type Content map[ContentType]string
 
 func NoopContent(io.Reader) Content {
 	return make(Content)
@@ -40,6 +38,25 @@ func ExtractBasic(body io.Reader) (content Content) {
 		case atom.Title:
 			text := element.FirstChild.Data
 			collect["title"] = append(collect["title"], text)
+
+		case atom.Link:
+			// <link href="/images/branding/product/ico/googleg_lodp.ico" rel="shortcut icon">
+			var rel, href string
+			for _, attr := range element.Attr {
+				switch attr.Key {
+				case "rel":
+					rel = attr.Val
+				case "href":
+					href = attr.Val
+				}
+			}
+
+			if rel != "" && href != "" {
+				// favicon
+				if strings.Contains(rel, "shortcut") && strings.Contains(rel, "icon") {
+					collect["favicon"] = append(collect["favicon"], href)
+				}
+			}
 
 		case atom.Meta:
 			// special case: pair meta attrs to form key-val pairs
@@ -82,5 +99,21 @@ func ExtractBasic(body io.Reader) (content Content) {
 		content[Description] = descs[0]
 	}
 
+	if favicons := collect["favicon"]; len(favicons) > 0 {
+		content[FavIcon] = favicons[0]
+	}
+
 	return
+}
+
+func flatten(root *html.Node) []*html.Node {
+	result := []*html.Node{root}
+	for curr := root.FirstChild; curr != nil; curr = curr.NextSibling {
+		switch curr.Type {
+		case html.ElementNode:
+			result = append(result, flatten(curr)...)
+		}
+	}
+
+	return result
 }

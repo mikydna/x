@@ -152,19 +152,19 @@ func (e *RedisExpander) Expand(ctx context.Context, url string) (result *Result,
 
 		pipeLen := 0
 
-		if expandErr != nil {
-			conn.PipeAppend("hset", rKey, "ERR", err)
-			pipeLen += 1
-
-			conn.PipeAppend("expire", rKey, DefaultCacheErrorExpire.Seconds())
-			pipeLen += 1
-		}
-
 		if result != nil {
 			conn.PipeAppend("hmset", rKey, toStrMap(result))
 			pipeLen += 1
 
 			conn.PipeAppend("expire", rKey, DefaultCacheExpire.Seconds())
+			pipeLen += 1
+		}
+
+		if expandErr != nil {
+			conn.PipeAppend("hset", rKey, "ERR", err)
+			pipeLen += 1
+
+			conn.PipeAppend("expire", rKey, DefaultCacheErrorExpire.Seconds())
 			pipeLen += 1
 		}
 

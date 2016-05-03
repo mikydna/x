@@ -11,52 +11,50 @@ import (
 	"golang.org/x/net/context"
 )
 
-type testcase struct {
-	URL       string
-	Expected  *Result
-	ShouldErr bool
-}
-
 var (
 	google, _    = url.Parse("http://www.google.com/")
 	yahoo, _     = url.Parse("https://www.yahoo.com/")
 	altavista, _ = url.Parse("http://search.yahoo.com/?fr=altavista")
 
-	TestTable = []testcase{
-		testcase{
-			URL: "http://google.com",
-			Expected: &Result{
+	testTableRedisExpand = []struct {
+		url       string
+		expected  *Result
+		shouldErr bool
+	}{
+		{
+			url: "http://google.com",
+			expected: &Result{
 				StatusCode:  200,
 				ResolvedURL: google,
 			},
-			ShouldErr: false,
+			shouldErr: false,
 		},
-		testcase{
-			URL: "http://yahoo.com",
-			Expected: &Result{
+		{
+			url: "http://yahoo.com",
+			expected: &Result{
 				StatusCode:  200,
 				ResolvedURL: yahoo,
 			},
-			ShouldErr: false,
+			shouldErr: false,
 		},
-		testcase{
-			URL: "http://altavista.com",
-			Expected: &Result{
+		{
+			url: "http://altavista.com",
+			expected: &Result{
 				StatusCode:  200,
 				ResolvedURL: altavista,
 			},
-			ShouldErr: false,
+			shouldErr: false,
 		},
-		testcase{
-			URL:       "http://doesnotexist.really",
-			Expected:  nil,
-			ShouldErr: true,
+		{
+			url:       "http://doesnotexist.really",
+			expected:  nil,
+			shouldErr: true,
 		},
 	}
 )
 
 var (
-	TestRedisConf = redis.Conf{
+	testRedisConf = redis.Conf{
 		Host:     "localhost:6379",
 		Database: 12,
 		Pool:     1,
@@ -69,39 +67,36 @@ func TestRedisExpand(t *testing.T) {
 	}
 
 	client := http.DefaultClient
-	expander, err := NewRedisExpander(TestRedisConf, client, NoopContent)
+	expander, err := NewRedisExpander(testRedisConf, client, NoopContent)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer expander.FlushAll()
 
-	{ // miss test
+	{ // miss all
 
-		for _, test := range TestTable {
-			expected := test.Expected
-			shouldErr := test.ShouldErr
-
+		for _, test := range testTableRedisExpand {
 			ctx := context.TODO()
-			result, err := expander.Expand(ctx, test.URL)
+			result, err := expander.Expand(ctx, test.url)
 
 			if result == nil {
 
-				if expected != nil {
+				if test.expected != nil {
 					t.Error("Unexpected non-nil expand result")
 				}
 
-				if shouldErr && (err == nil) {
+				if test.shouldErr && (err == nil) {
 					t.Error("Unexpected non error")
 				}
 
 			} else {
 
-				if expected.ResolvedURL.String() != result.ResolvedURL.String() {
-					t.Errorf("Unexpected expand resolved url: %v != %v", expected.ResolvedURL, result.ResolvedURL)
+				if test.expected.ResolvedURL.String() != result.ResolvedURL.String() {
+					t.Errorf("Unexpected expand resolved url: %v != %v", test.expected.ResolvedURL, result.ResolvedURL)
 				}
 
-				if expected.StatusCode != result.StatusCode {
-					t.Errorf("Unexpected expand status code: %d != %d", expected.StatusCode, result.StatusCode)
+				if test.expected.StatusCode != result.StatusCode {
+					t.Errorf("Unexpected expand status code: %d != %d", test.expected.StatusCode, result.StatusCode)
 				}
 
 			}
@@ -112,33 +107,30 @@ func TestRedisExpand(t *testing.T) {
 		}
 	}
 
-	{ // hit test
+	{ // hit all
 
-		for _, test := range TestTable {
-			expected := test.Expected
-			shouldErr := test.ShouldErr
-
+		for _, test := range testTableRedisExpand {
 			ctx := context.TODO()
-			result, err := expander.Expand(ctx, test.URL)
+			result, err := expander.Expand(ctx, test.url)
 
 			if result == nil {
 
-				if expected != nil {
+				if test.expected != nil {
 					t.Error("Unexpected non-nil expand result")
 				}
 
-				if shouldErr && (err == nil) {
+				if test.shouldErr && (err == nil) {
 					t.Error("Unexpected non error")
 				}
 
 			} else {
 
-				if expected.ResolvedURL.String() != result.ResolvedURL.String() {
-					t.Errorf("Unexpected expand resolved url: %v != %v", expected.ResolvedURL, result.ResolvedURL)
+				if test.expected.ResolvedURL.String() != result.ResolvedURL.String() {
+					t.Errorf("Unexpected expand resolved url: %v != %v", test.expected.ResolvedURL, result.ResolvedURL)
 				}
 
-				if expected.StatusCode != result.StatusCode {
-					t.Errorf("Unexpected expand status code: %d != %d", expected.StatusCode, result.StatusCode)
+				if test.expected.StatusCode != result.StatusCode {
+					t.Errorf("Unexpected expand status code: %d != %d", test.expected.StatusCode, result.StatusCode)
 				}
 
 			}
@@ -148,4 +140,5 @@ func TestRedisExpand(t *testing.T) {
 			t.Errorf("Unexpected hit/miss: miss%.0f != %.0f; hit %.0f != %.0f", stats["miss"], 4.0, stats["hit"], 4.0)
 		}
 	}
+
 }
