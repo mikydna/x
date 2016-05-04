@@ -1,4 +1,4 @@
-package link2
+package link
 
 import (
 	"bytes"

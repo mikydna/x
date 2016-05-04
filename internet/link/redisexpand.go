@@ -1,4 +1,4 @@
-package link2
+package link
 
 import (
 	"errors"
@@ -64,7 +64,7 @@ func NewRedisExpander(conf redis.Conf, client *http.Client, processor ContentFun
 
 func (e *RedisExpander) Expand(ctx context.Context, url string) (result *Result, err error) {
 	conn, connErr := e.Conn()
-	if err != nil {
+	if connErr != nil {
 		err = connErr
 		return
 	}
@@ -85,7 +85,6 @@ func (e *RedisExpander) Expand(ctx context.Context, url string) (result *Result,
 
 	if len(strmap) == 0 { // miss
 		var expandErr error
-
 		result, expandErr = e.Expander.Expand(ctx, url)
 		if expandErr != nil {
 			err = expandErr

@@ -1,124 +1,67 @@
 package link
 
 import (
+	"io"
 	"net/http"
-	"net/url"
 	"time"
 )
 
 import (
-	"golang.org/x/net/publicsuffix"
+	"golang.org/x/net/context"
+	"golang.org/x/net/context/ctxhttp"
 )
 
-// var DefaultClient *http.Client = &http.Client{
-// 	// Timeout: 2500 * time.Millisecond,
-// }
+// expansion is expensive
+// - network is a limited resource
+// - it pretty slow (200-3000s)
 
-var DefaultClient = http.DefaultClient
+// expansion "resolve" logic *can* to be domain specific
+// - nytimes has 10+ redirects + pay-wall
 
-var DefaultExpander Expander = NewLinkExpander(
-	DefaultClient,
-	[]Format{RemoveUTMQueryParams, Normalize},
-)
+// expansion results should expire/retry-later
+// - servers can be temporarily down.. expbkoff retry ?
 
-type Result struct {
-	URL          *url.URL
-	Domain       string
-	Title        string
-	Err          error
-	StatusCode   int
-	ResponseTime time.Duration
+type ContentFunc func(io.Reader) Content
+
+type Expander struct {
+	client  *http.Client
+	content ContentFunc
 }
 
-type Format func(url *url.URL) *url.URL
-
-type Expander interface {
-	Expand(string) *Result
-}
-
-type LinkExpander struct {
-	client     *http.Client
-	formatters []Format
-}
-
-func NewLinkExpander(client *http.Client, formatters []Format) *LinkExpander {
-	expander := &LinkExpander{
-		client:     client,
-		formatters: formatters,
+func NewExpander(client *http.Client, processor ContentFunc) *Expander {
+	expander := Expander{
+		client:  client,
+		content: processor,
 	}
 
-	return expander
+	return &expander
 }
 
-func (e *LinkExpander) Expand(rawurl string) (result *Result) {
-	start := time.Now()
-	resp, respErr := e.client.Get(rawurl)
-	if resp == nil {
-		result = &Result{Err: respErr}
-		return
+func (e *Expander) Expand(ctx context.Context, url string) (result *Result, err error) {
+	startedAt := time.Now()
+
+	resp, httpErr := ctxhttp.Get(ctx, e.client, url)
+
+	// non-nil err still requires processing
+	if httpErr != nil {
+		err = httpErr
 	}
 
-	defer func() {
+	responseTime := time.Since(startedAt)
+
+	if resp != nil {
+		var content Content
 		if resp.Body != nil {
-			resp.Body.Close()
+			content = e.content(resp.Body)
+			defer resp.Body.Close()
 		}
-	}()
 
-	elapsed := time.Since(start)
-	statusCode := resp.StatusCode
-
-	var url *url.URL
-	var err error
-
-	switch statusCode {
-	case http.StatusOK:
-		url = resp.Request.URL
-		err = nil
-
-	case http.StatusFound:
-		url, _ = resp.Location()
-		err = nil
-
-	case http.StatusSeeOther:
-		url = resp.Request.URL
-		err = nil
-
-	case http.StatusNotFound:
-		url = resp.Request.URL
-		err = respErr
-
-	default:
-		if locUrl, _ := resp.Location(); locUrl != nil {
-			url = locUrl
-		} else if reqUrl := resp.Request.URL; reqUrl != nil {
-			url = reqUrl
+		result = &Result{
+			ResolvedURL:  resp.Request.URL,
+			ResponseTime: responseTime,
+			StatusCode:   resp.StatusCode,
+			Content:      content,
 		}
-	}
-
-	if url != nil {
-		for _, format := range e.formatters {
-			url = format(url)
-		}
-	}
-
-	var domain string
-	if url != nil {
-		domain, _ = publicsuffix.EffectiveTLDPlusOne(url.Host)
-	}
-
-	var title string
-
-	if statusCode == 200 && resp.Body != nil {
-		title = ExtractTitle(resp.Body)
-	}
-
-	result = &Result{
-		URL:          url,
-		Domain:       domain,
-		Title:        title,
-		Err:          err,
-		StatusCode:   statusCode,
-		ResponseTime: elapsed,
 	}
 
 	return

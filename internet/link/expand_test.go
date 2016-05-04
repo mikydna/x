@@ -1,62 +1,151 @@
 package link
 
 import (
+	// "log"
+	"net/http"
+	"net/url"
 	"testing"
+	"time"
 )
 
-type TestCase struct {
-	URL         string
-	Expected    string
-	ExpectedErr bool
+import (
+	"golang.org/x/net/context"
+)
+
+func panicURLParse(rawurl string) *url.URL {
+	parsed, err := url.Parse(rawurl)
+	if err != nil {
+		panic(err)
+	}
+
+	return parsed
 }
 
-var TestTableExpander = []TestCase{
-	TestCase{
-		URL:      "http://buff.ly/1VzMRMR",
-		Expected: "http://www.fastcodesign.com/3059211/how-to-design-a-wearable-for-lebron-james",
+var expandTests = []struct {
+	url       string
+	expected  *Result
+	shouldErr bool
+}{
+
+	// happy
+	{
+		url:       "http://google.com",
+		shouldErr: false,
+		expected: &Result{
+			StatusCode:  200,
+			ResolvedURL: panicURLParse("http://www.google.com/"),
+		},
 	},
-	TestCase{
-		URL:      "http://53eig.ht/1NPi5aD",
-		Expected: "http://fivethirtyeight.com/features/today-is-clintons-chance-to-end-the-groundhog-day-campaign",
+	{
+		url:       "http://yahoo.com",
+		shouldErr: false,
+		expected: &Result{
+			StatusCode:  200,
+			ResolvedURL: panicURLParse("https://www.yahoo.com/"),
+		},
 	},
-	TestCase{
-		URL:      "http://theatln.tc/1ZFJFhB",
-		Expected: "http://www.theatlantic.com/business/archive/2016/03/how-trackers-make-leisure-like-work/471864",
+	{
+		url:       "http://altavista.com",
+		shouldErr: false,
+		expected: &Result{
+			StatusCode:  200,
+			ResolvedURL: panicURLParse("http://search.yahoo.com/?fr=altavista"),
+		},
 	},
-	TestCase{
-		URL:      "http://nyti.ms/1YR7S3w",
-		Expected: "http://www.nytimes.com/2016/04/20/business/economy/liberal-biases-too-may-block-progress-on-climate-change.html?_r=3",
+
+	// worried
+	{
+		url:       "http://nyti.ms/1YR7S3w",
+		shouldErr: true,
+		expected: &Result{
+			StatusCode:  303,
+			ResolvedURL: panicURLParse("http://www.nytimes.com/2016/04/20/business/economy/liberal-biases-too-may-block-progress-on-climate-change.html?_r=3"),
+		},
 	},
-	TestCase{
-		URL:      "http://bit.ly/26qsQM1",
-		Expected: "http://vimeo.com/133127360",
-	},
-	TestCase{
-		URL:      "http://www.nytimes.com/2016/04/26/books/review-in-don-delillos-zero-k-daring-to-outwit-death.html",
-		Expected: "http://www.nytimes.com/2016/04/26/books/review-in-don-delillos-zero-k-daring-to-outwit-death.html?_r=4",
-	},
-	TestCase{
-		URL:      "http://google.com/?z=1&a=0",
-		Expected: "http://www.google.com?a=0&z=1",
-	},
-	TestCase{
-		URL:         "http://i.dont.exist/?z=1&a=0",
-		Expected:    "",
-		ExpectedErr: true,
+
+	// sad
+	{
+		url:       "http://doesnotexist.really",
+		shouldErr: true,
+		expected:  nil,
 	},
 }
 
 func TestExpand(t *testing.T) {
-	expander := NewLinkExpander(DefaultClient, []Format{RemoveUTMQueryParams, Normalize})
-	for _, test := range TestTableExpander {
-		result := expander.Expand(test.URL)
+	if testing.Short() {
+		t.Skip("Requires outbound http reqs")
+	}
 
-		if hasErr := result.Err != nil; hasErr != test.ExpectedErr {
-			t.Error(result.Err)
+	expander := NewExpander(http.DefaultClient, ExtractBasic)
+
+	for _, test := range expandTests {
+		ctx := context.TODO()
+		result, err := expander.Expand(ctx, test.url)
+
+		if test.shouldErr && (err == nil) {
+			t.Error("Unexpected non error")
 		}
 
-		if resolved := result.URL; resolved != nil && resolved.String() != test.Expected {
-			t.Error("Unexpected expand result")
+		if result == nil {
+
+			if test.expected != nil {
+				t.Error("Unexpected non-nil expand result")
+			}
+
+		} else {
+
+			if test.expected.ResolvedURL.String() != result.ResolvedURL.String() {
+				t.Errorf("Unexpected expand resolved url: %v != %v", test.expected.ResolvedURL, result.ResolvedURL)
+			}
+
+			if test.expected.StatusCode != result.StatusCode {
+				t.Errorf("Unexpected expand status code: %d != %d", test.expected.StatusCode, result.StatusCode)
+			}
+
 		}
+	}
+
+}
+
+func TestExpand_WithContext(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Requires outbound http reqs")
+	}
+
+	var (
+		result *Result
+		err    error
+	)
+
+	expander := NewExpander(http.DefaultClient, ExtractBasic)
+
+	ctx, cancel := context.WithTimeout(context.TODO(), 2*time.Second)
+
+	go func() {
+		result, err = expander.Expand(ctx, "http://google.com")
+		defer cancel()
+	}()
+
+	select {
+	case <-ctx.Done():
+
+		if result == nil {
+			t.Fatal("Unexpected nil result")
+		}
+
+		if err != nil {
+			t.Fatalf("Unexpected err: %v", err)
+		}
+
+		if result.StatusCode != 200 {
+			t.Errorf("Unexpected statusCode: %d != %d", 200, result.StatusCode)
+		}
+
+		if result.ResolvedURL == nil || result.ResolvedURL.String() != "http://www.google.com/" {
+			t.Errorf("Unexpected resolved url: %s != %s", "http://www.google.com/", result.ResolvedURL)
+		}
+
+	case <-time.After(3 * time.Second):
+		t.Fatal("Unexpected timeout")
 	}
 }

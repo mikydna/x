@@ -1,10 +1,6 @@
 package redis
 
 import (
-	"time"
-)
-
-import (
 	"github.com/mediocregopher/radix.v2/pool"
 	"github.com/mediocregopher/radix.v2/redis"
 )
@@ -31,17 +27,17 @@ func New(conf Conf) (*Redis, error) {
 		db:   conf.Database,
 	}
 
-	go func() {
-		ticker := time.NewTicker(500 * time.Millisecond)
-		for _ = range ticker.C {
-			conn, err := redis.Conn()
-			if err == nil {
-				if _, err := conn.Cmd("ping").Str(); err == nil {
-					redis.Release(conn)
-				}
-			}
-		}
-	}()
+	// go func() {
+	// 	ticker := time.NewTicker(500 * time.Millisecond)
+	// 	for _ = range ticker.C {
+	// 		conn, err := redis.Conn()
+	// 		if err == nil {
+	// 			if _, err := conn.Cmd("ping").Str(); err == nil {
+	// 				redis.Release(conn)
+	// 			}
+	// 		}
+	// 	}
+	// }()
 
 	return redis, nil
 }
@@ -53,7 +49,9 @@ func (r *Redis) Conn() (*redis.Client, error) {
 	}
 
 	// workaround :/
-	client.Cmd("select", r.db)
+	if err := client.Cmd("select", r.db).Err; err != nil {
+		return nil, err
+	}
 
 	return client, nil
 }
