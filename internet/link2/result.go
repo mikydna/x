@@ -59,7 +59,7 @@ func (r *Result) UnmarshalStringMap(strmap map[string]string) error {
 	}
 
 	result.Content = make(Content)
-	for _, key := range []ContentType{Title, Description} {
+	for _, key := range []ContentType{Title, Description, FavIcon} {
 		ckey := fmt.Sprintf("c_%d", key)
 		if str, exists := strmap[ckey]; exists {
 			result.Content[key] = str

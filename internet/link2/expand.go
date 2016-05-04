@@ -19,7 +19,7 @@ import (
 // - nytimes has 10+ redirects + pay-wall
 
 // expansion results should expire/retry-later
-// - servers can be temporarily down.. expbkoff retry
+// - servers can be temporarily down.. expbkoff retry ?
 
 type ContentFunc func(io.Reader) Content
 
@@ -37,27 +37,32 @@ func NewExpander(client *http.Client, processor ContentFunc) *Expander {
 	return &expander
 }
 
-func (e *Expander) Expand(ctx context.Context, url string) (*Result, error) {
+func (e *Expander) Expand(ctx context.Context, url string) (result *Result, err error) {
 	startedAt := time.Now()
-	resp, err := ctxhttp.Get(ctx, e.client, url)
-	if err != nil {
-		return nil, err
+
+	resp, httpErr := ctxhttp.Get(ctx, e.client, url)
+
+	// non-nil err still requires processing
+	if httpErr != nil {
+		err = httpErr
 	}
 
 	responseTime := time.Since(startedAt)
 
-	var content Content
-	if resp != nil && resp.Body != nil {
-		content = e.content(resp.Body)
-		defer resp.Body.Close()
+	if resp != nil {
+		var content Content
+		if resp.Body != nil {
+			content = e.content(resp.Body)
+			defer resp.Body.Close()
+		}
+
+		result = &Result{
+			ResolvedURL:  resp.Request.URL,
+			ResponseTime: responseTime,
+			StatusCode:   resp.StatusCode,
+			Content:      content,
+		}
 	}
 
-	result := &Result{
-		ResolvedURL:  resp.Request.URL,
-		ResponseTime: responseTime,
-		StatusCode:   resp.StatusCode,
-		Content:      content,
-	}
-
-	return result, nil
+	return
 }

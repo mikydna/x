@@ -2,55 +2,12 @@ package link2
 
 import (
 	"net/http"
-	"net/url"
 	"testing"
 )
 
 import (
 	"github.com/mikydna/x/redis"
 	"golang.org/x/net/context"
-)
-
-var (
-	google, _    = url.Parse("http://www.google.com/")
-	yahoo, _     = url.Parse("https://www.yahoo.com/")
-	altavista, _ = url.Parse("http://search.yahoo.com/?fr=altavista")
-
-	testTableRedisExpand = []struct {
-		url       string
-		expected  *Result
-		shouldErr bool
-	}{
-		{
-			url: "http://google.com",
-			expected: &Result{
-				StatusCode:  200,
-				ResolvedURL: google,
-			},
-			shouldErr: false,
-		},
-		{
-			url: "http://yahoo.com",
-			expected: &Result{
-				StatusCode:  200,
-				ResolvedURL: yahoo,
-			},
-			shouldErr: false,
-		},
-		{
-			url: "http://altavista.com",
-			expected: &Result{
-				StatusCode:  200,
-				ResolvedURL: altavista,
-			},
-			shouldErr: false,
-		},
-		{
-			url:       "http://doesnotexist.really",
-			expected:  nil,
-			shouldErr: true,
-		},
-	}
 )
 
 var (
@@ -73,20 +30,20 @@ func TestRedisExpand(t *testing.T) {
 	}
 	defer expander.FlushAll()
 
-	{ // miss all
+	{ // misses
 
-		for _, test := range testTableRedisExpand {
+		for _, test := range expandTests {
 			ctx := context.TODO()
 			result, err := expander.Expand(ctx, test.url)
+
+			if (err == nil) && test.shouldErr {
+				t.Error("Unexpected non error")
+			}
 
 			if result == nil {
 
 				if test.expected != nil {
 					t.Error("Unexpected non-nil expand result")
-				}
-
-				if test.shouldErr && (err == nil) {
-					t.Error("Unexpected non error")
 				}
 
 			} else {
@@ -102,25 +59,25 @@ func TestRedisExpand(t *testing.T) {
 			}
 		}
 
-		if stats := expander.Stats(); stats["miss"] != 4 || stats["hit"] > 0 {
-			t.Errorf("Unexpected hit/miss: miss %.0f != %.0f; hit %.0f != %.0f", stats["miss"], 4.0, stats["hit"], 0.0)
+		if stats := expander.Stats(); stats["miss"] != 5 || stats["hit"] > 0 {
+			t.Errorf("Unexpected hit/miss: miss %.0f != %d; hit %.0f != %d", stats["miss"], 5, stats["hit"], 0.0)
 		}
 	}
 
-	{ // hit all
+	{ // hits
 
-		for _, test := range testTableRedisExpand {
+		for _, test := range expandTests {
 			ctx := context.TODO()
 			result, err := expander.Expand(ctx, test.url)
+
+			if (err == nil) && test.shouldErr {
+				t.Errorf("Unexpected non error: %s", test.url)
+			}
 
 			if result == nil {
 
 				if test.expected != nil {
-					t.Error("Unexpected non-nil expand result")
-				}
-
-				if test.shouldErr && (err == nil) {
-					t.Error("Unexpected non error")
+					t.Errorf("Unexpected non-nil expand result: %s", test.url)
 				}
 
 			} else {
@@ -136,8 +93,8 @@ func TestRedisExpand(t *testing.T) {
 			}
 		}
 
-		if stats := expander.Stats(); stats["miss"] != 4 || stats["hit"] != 4 {
-			t.Errorf("Unexpected hit/miss: miss%.0f != %.0f; hit %.0f != %.0f", stats["miss"], 4.0, stats["hit"], 4.0)
+		if stats := expander.Stats(); stats["miss"] != 5 || stats["hit"] != 5 {
+			t.Errorf("Unexpected hit/miss: miss %.0f != %d; hit %.0f != %d", stats["miss"], 5, stats["hit"], 5)
 		}
 	}
 

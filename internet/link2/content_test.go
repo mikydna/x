@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-var testTableExtractBasic = []struct {
+var contentTests = []struct {
 	file     string
 	expected Content
 }{
@@ -29,7 +29,7 @@ var testTableExtractBasic = []struct {
 }
 
 func TestExtractBasic(t *testing.T) {
-	for _, test := range testTableExtractBasic {
+	for _, test := range contentTests {
 		b, err := ioutil.ReadFile(test.file)
 		if err != nil {
 			t.Fatalf("Can not read test file: %s", test.file)

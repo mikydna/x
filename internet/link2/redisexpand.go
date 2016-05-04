@@ -16,12 +16,12 @@ import (
 )
 
 const (
-	DefaultCacheExpire      = 24 * time.Hour
-	DefaultCacheErrorExpire = 1 * time.Hour
+	DefaultExpireCacheEntry          = 24 * time.Hour
+	DefaultExpireCacheEntryWithError = 1 * time.Hour
 )
 
 // fix later: merge with x/stats
-// - use rwmutex
+// - use rwmutex ?
 type stats struct {
 	values map[string]float64
 	*sync.Mutex
@@ -73,17 +73,17 @@ func (e *RedisExpander) Expand(ctx context.Context, url string) (result *Result,
 	// compute cache key
 	e.hashf.Reset()
 	e.hashf.Write([]byte(url))
-	cacheKey := e.hashf.Sum64()
+	urlhash := e.hashf.Sum64()
 
 	// check cache
-	rKey := fmt.Sprintf("link:%d", cacheKey)
-	rMap, cmdErr := conn.Cmd("hgetall", rKey).Map()
+	cachekey := fmt.Sprintf("link:%d", urlhash)
+	strmap, cmdErr := conn.Cmd("hgetall", cachekey).Map()
 	if err != nil {
 		err = cmdErr
 		return
 	}
 
-	if len(rMap) == 0 { // miss
+	if len(strmap) == 0 { // miss
 		var expandErr error
 
 		result, expandErr = e.Expander.Expand(ctx, url)
@@ -91,26 +91,26 @@ func (e *RedisExpander) Expand(ctx context.Context, url string) (result *Result,
 			err = expandErr
 		}
 
-		pipeLen := 0
+		pipelen := 0
 
 		if result != nil {
 			vals, _ := result.MarshalStringMap()
-			conn.PipeAppend("hmset", rKey, vals)
-			pipeLen += 1
+			conn.PipeAppend("hmset", cachekey, vals)
+			pipelen += 1
 
-			conn.PipeAppend("expire", rKey, DefaultCacheExpire.Seconds())
-			pipeLen += 1
+			conn.PipeAppend("expire", cachekey, DefaultExpireCacheEntry.Seconds())
+			pipelen += 1
 		}
 
 		if expandErr != nil {
-			conn.PipeAppend("hset", rKey, "ERR", err)
-			pipeLen += 1
+			conn.PipeAppend("hset", cachekey, "ERR", err)
+			pipelen += 1
 
-			conn.PipeAppend("expire", rKey, DefaultCacheErrorExpire.Seconds())
-			pipeLen += 1
+			conn.PipeAppend("expire", cachekey, DefaultExpireCacheEntryWithError.Seconds())
+			pipelen += 1
 		}
 
-		for i := 0; i < pipeLen; i++ {
+		for i := 0; i < pipelen; i++ {
 			if pipeErr := conn.PipeResp().Err; pipeErr != nil {
 				err = pipeErr
 				return
@@ -121,17 +121,19 @@ func (e *RedisExpander) Expand(ctx context.Context, url string) (result *Result,
 
 	} else { // hit
 
-		if str, exists := rMap["ERR"]; exists {
+		if str, exists := strmap["ERR"]; exists {
 			cachedErr := errors.New(str)
 			err = cachedErr
 
-		} else {
+			delete(strmap, "ERR")
+		}
+
+		if len(strmap) > 0 {
 			result = &Result{}
-			if decodeErr := result.UnmarshalStringMap(rMap); decodeErr != nil {
+			if decodeErr := result.UnmarshalStringMap(strmap); decodeErr != nil {
 				err = decodeErr
 				return
 			}
-
 		}
 
 		e.stats.incr("hit", 1)
