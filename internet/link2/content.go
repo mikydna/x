@@ -40,7 +40,6 @@ func ExtractBasic(body io.Reader) (content Content) {
 			collect["title"] = append(collect["title"], text)
 
 		case atom.Link:
-			// <link href="/images/branding/product/ico/googleg_lodp.ico" rel="shortcut icon">
 			var rel, href string
 			for _, attr := range element.Attr {
 				switch attr.Key {
@@ -52,7 +51,7 @@ func ExtractBasic(body io.Reader) (content Content) {
 			}
 
 			if rel != "" && href != "" {
-				// favicon
+				// <link href="/images/branding/product/ico/googleg_lodp.ico" rel="shortcut icon">
 				if strings.Contains(rel, "shortcut") && strings.Contains(rel, "icon") {
 					collect["favicon"] = append(collect["favicon"], href)
 				}

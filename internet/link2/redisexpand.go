@@ -6,8 +6,6 @@ import (
 	"hash"
 	"hash/fnv"
 	"net/http"
-	"net/url"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -39,63 +37,6 @@ func (s *stats) get(key string) float64 {
 	s.Lock()
 	defer s.Unlock()
 	return s.values[key]
-}
-
-// fix: MarshalRedisMap(r) ???
-func toStrMap(r *Result) map[string]string {
-	strMap := make(map[string]string)
-	strMap["statusCode"] = fmt.Sprintf("%d", r.StatusCode)
-	strMap["responseTime"] = fmt.Sprintf("%d", r.ResponseTime.Nanoseconds())
-	strMap["resolvedURL"] = r.ResolvedURL.String()
-
-	for key, val := range r.Content {
-		rhkey := fmt.Sprintf("c_%d", key)
-		strMap[rhkey] = val
-	}
-
-	return strMap
-}
-
-// fix: UnmarshalRedisMap(r) ???
-func fromStrMap(rmap map[string]string) (*Result, error) {
-	var result Result
-
-	if str, exists := rmap["statusCode"]; exists {
-		statusCode, err := strconv.ParseInt(str, 10, 32)
-		if err != nil {
-			return nil, err
-		}
-
-		result.StatusCode = int(statusCode)
-	}
-
-	if str, exists := rmap["responseTime"]; exists {
-		responseTime, err := strconv.ParseInt(str, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-
-		result.ResponseTime = time.Duration(responseTime)
-	}
-
-	if str, exists := rmap["resolvedURL"]; exists {
-		resolvedURL, err := url.Parse(str)
-		if err != nil {
-			return nil, err
-		}
-
-		result.ResolvedURL = resolvedURL
-	}
-
-	result.Content = make(Content)
-	for _, key := range []ContentType{Title, Description} {
-		rhkey := fmt.Sprintf("c_%d", key)
-		if str, exists := rmap[rhkey]; exists {
-			result.Content[key] = str
-		}
-	}
-
-	return &result, nil
 }
 
 type RedisExpander struct {
@@ -153,7 +94,8 @@ func (e *RedisExpander) Expand(ctx context.Context, url string) (result *Result,
 		pipeLen := 0
 
 		if result != nil {
-			conn.PipeAppend("hmset", rKey, toStrMap(result))
+			vals, _ := result.MarshalStringMap()
+			conn.PipeAppend("hmset", rKey, vals)
 			pipeLen += 1
 
 			conn.PipeAppend("expire", rKey, DefaultCacheExpire.Seconds())
@@ -184,9 +126,8 @@ func (e *RedisExpander) Expand(ctx context.Context, url string) (result *Result,
 			err = cachedErr
 
 		} else {
-			var decodeErr error
-			result, decodeErr = fromStrMap(rMap)
-			if decodeErr != nil {
+			result = &Result{}
+			if decodeErr := result.UnmarshalStringMap(rMap); decodeErr != nil {
 				err = decodeErr
 				return
 			}
